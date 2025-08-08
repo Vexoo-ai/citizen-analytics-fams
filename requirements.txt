@@ -1,0 +1,25 @@
+# FastAPI and web server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Data processing and ML
+pandas
+numpy
+scikit-learn
+imbalanced-learn
+
+# Visualization
+matplotlib
+seaborn
+
+# ML AutoML (optional)
+pycaret
+
+# AI integration
+anthropic
+
+# Environment and utilities
+python-dotenv
+pydantic
+
