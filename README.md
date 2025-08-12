@@ -9,7 +9,7 @@ This FastAPI application transforms your machine learning workflow by providing 
 ## ✨ Key Features
 
 - 📊 **Bias/Variance Analysis** - Test model stability across 10-1000 random seeds
-- 🤖 **AI-Powered Insights** - Claude AI analysis of your results with visualizations
+- 🤖 **AI-Powered Insights** - vexoo AI analysis of your results with visualizations
 - 📈 **AutoML Integration** - PyCaret model comparison across different algorithms
 - 📁 **File Management** - Upload CSV/Excel files with intelligent preprocessing
 - ⚡ **Async Processing** - Non-blocking background analysis with real-time progress
@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 3. **Set environment variables:**
 ```bash
-# Required for Claude AI analysis
+# Required for Vexoo AI analysis
 export ANTHROPIC_API_KEY="your-anthropic-api-key-here"
 
 # Optional: Copy and customize environment file
@@ -135,7 +135,7 @@ curl -X POST "http://localhost:8000/analyze" \
     "remove_columns": ["customer_id"],
     "impute_method": "mean",
     "skip_pycaret": false,
-    "skip_claude": false
+    "skip_vexoo": false
   }'
 ```
 
@@ -152,7 +152,7 @@ curl -X POST "http://localhost:8000/analyze" \
     "remove_columns": ["property_id", "listing_date"],
     "impute_method": "iterative",
     "skip_pycaret": false,
-    "skip_claude": false
+    "skip_vexoo": false
   }'
 ```
 
@@ -169,7 +169,7 @@ curl -X POST "http://localhost:8000/analyze" \
     "remove_columns": [],
     "impute_method": "mean",
     "skip_pycaret": true,
-    "skip_claude": true
+    "skip_vexoo": true
   }'
 ```
 
@@ -186,7 +186,7 @@ curl -X POST "http://localhost:8000/analyze" \
     "remove_columns": ["user_id", "session_id"],
     "impute_method": "iterative",
     "skip_pycaret": false,
-    "skip_claude": false
+    "skip_vexoo": false
   }'
 ```
 
@@ -252,7 +252,7 @@ curl "http://localhost:8000/downloads/your-job-id"
 **Generated Files:**
 - 📊 `bias_variance_line_plot.png` - Performance across seeds
 - 📈 `score_distribution.png` - Score distribution histogram
-- 📋 `claude_analysis.md` - AI expert analysis report
+- 📋 `vexoo_analysis.md` - AI expert analysis report
 - 📄 `pycaret_best_seed.csv` - Best performing models
 - 📄 `pycaret_worst_seed.csv` - Worst performing models
 - 📄 `pycaret_most_common_seed.csv` - Most common seed models
@@ -263,7 +263,7 @@ Access generated analysis files directly:
 
 ```bash
 # Access via mounted static files (recommended)
-curl "http://localhost:8000/files/your-job-id/claude_analysis.md" \
+curl "http://localhost:8000/files/your-job-id/vexoo_analysis.md" \
   --output analysis_report.md
 
 curl "http://localhost:8000/files/your-job-id/bias_variance_line_plot.png" \
@@ -340,7 +340,7 @@ Healthcare applications requiring high precision:
 Create a `.env` file:
 
 ```bash
-# Required for Claude AI analysis
+# Required for vexoo AI analysis
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
 # Optional application settings
@@ -362,7 +362,7 @@ API_KEY_HEADER=X-API-Key
 
 **For faster development/testing:**
 - Use `iterations: 20-50`
-- Set `skip_pycaret: true` and `skip_claude: true`
+- Set `skip_pycaret: true` and `skip_vexoo: true`
 
 **For production analysis:**
 - Use `iterations: 100-500`
@@ -397,7 +397,7 @@ The analysis reveals crucial model characteristics:
 - **RMSE** - Penalizes large errors more heavily
 - **R²** - Proportion of variance explained
 
-### Claude AI Analysis
+### vexoo AI Analysis
 
 The AI analysis provides:
 - 🎯 **Model Selection Recommendations**

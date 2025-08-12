@@ -46,7 +46,7 @@ class AnalysisRequest(BaseModel):
     remove_columns: List[str] = Field(default=[], description="Columns to exclude from features")
     impute_method: ImputeMethod = Field(ImputeMethod.mean, description="Missing value imputation method")
     skip_pycaret: bool = Field(False, description="Skip PyCaret model comparison")
-    skip_claude: bool = Field(False, description="Skip Claude AI analysis")
+    skip_vexoo: bool = Field(False, description="Skip Vexoo AI analysis")
 
 
 class FileUploadResponse(BaseModel):
@@ -101,7 +101,7 @@ class AnalysisResults(BaseModel):
     summary: AnalysisSummary
     seed_results: List[SeedResult]
     pycaret_available: bool
-    claude_analysis_available: bool
+    vexoo_analysis_available: bool
     files_generated: List[str]
     execution_time: float
 

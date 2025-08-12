@@ -1,6 +1,6 @@
 """
 Model analysis module for CitizenAnalytics™ Model Selection (FastAPI version)
-Handles bias/variance estimation, PyCaret comparison, and Claude analysis
+Handles bias/variance estimation, PyCaret comparison, and Vexoo analysis
 """
 
 import pandas as pd
@@ -237,7 +237,7 @@ class ModelAnalyzer:
             plt.close()
             generated_files['histogram'] = str(histogram_path)
             
-            # Save histogram as base64 for Claude analysis
+            # Save histogram as base64 for Vexoo analysis
             plt.figure(figsize=(10, 6))
             plt.hist(scores, bins=20, alpha=0.7, edgecolor='black')
             plt.axvline(summary["common_score"], color='red', linestyle='--')
@@ -255,7 +255,7 @@ class ModelAnalyzer:
             buffer.seek(0)
             histogram_b64 = base64.b64encode(buffer.getvalue()).decode()
             
-            # Save base64 to file for Claude analysis
+            # Save base64 to file for Vexoo analysis
             b64_path = self.output_dir / 'histogram_b64.txt'
             with open(b64_path, 'w') as f:
                 f.write(histogram_b64)
@@ -342,12 +342,12 @@ class ModelAnalyzer:
             logger.error(f"PyCaret comparison failed: {str(e)}")
             return None
     
-    async def run_claude_analysis(self, results: List[Tuple[int, float]], 
+    async def run_vexoo_analysis(self, results: List[Tuple[int, float]], 
                                 summary: Dict[str, Any], pycaret_results: Optional[Dict[str, Any]], 
                                 api_key: Optional[str], problem_type: str, target_col: str, 
                                 metric: str, iterations: int,
                                 progress_callback: Optional[Callable] = None) -> Optional[str]:
-        """Run Claude analysis of the results (async version)"""
+        """Run Vexoo analysis of the results (async version)"""
         try:
             import anthropic
             
@@ -356,9 +356,9 @@ class ModelAnalyzer:
             
             # Use provided API key or get from environment
             if not api_key:
-                api_key = os.getenv('ANTHROPIC_API_KEY')
+                api_key = os.getenv('VEXOO_API_KEY')  # CHANGED: Use VEXOO_API_KEY instead
                 if not api_key:
-                    logger.warning("No Anthropic API key found")
+                    logger.warning("No VEXOO API key found")  # CHANGED: Updated log message
                     return None
             
             # Prepare context
@@ -386,7 +386,7 @@ Key Findings:
                     context += f"\n{rank} Seed - Top 5 Models:\n"
                     context += df.head(5).to_string(index=False, float_format='%.4f')
             
-            # Create Claude client
+            # Create Vexoo client
             client = anthropic.Anthropic(api_key=api_key)
             
             # Prepare the message content
@@ -436,17 +436,17 @@ Please structure your response as a clear, actionable report for a machine learn
                 ]
             )
             
-            # Extract the analysis from Claude's response
+            # Extract the analysis from Vexoo's response
             analysis = message.content[0].text
             
             # Save analysis to file
-            analysis_path = self.output_dir / 'claude_analysis.md'
+            analysis_path = self.output_dir / 'vexoo_analysis.md'
             with open(analysis_path, 'w', encoding='utf-8') as f:
-                f.write(f"# Claude Analysis Report\n\n")
+                f.write(f"# Vexoo Analysis Report\n\n")
                 f.write(f"## Context\n{context}\n\n")
                 f.write(f"## Analysis\n{analysis}")
             
-            logger.info(f"Claude analysis saved to {analysis_path}")
+            logger.info(f"Vexoo analysis saved to {analysis_path}")
             
             if progress_callback:
                 await progress_callback(100)
@@ -457,7 +457,7 @@ Please structure your response as a clear, actionable report for a machine learn
             logger.warning("Anthropic library not installed")
             return None
         except Exception as e:
-            logger.error(f"Claude analysis failed: {str(e)}")
+            logger.error(f"Vexoo analysis failed: {str(e)}")
             return None
     
     def get_available_files(self) -> List[Dict[str, Any]]:
@@ -468,7 +468,7 @@ Please structure your response as a clear, actionable report for a machine learn
             file_patterns = {
                 'bias_variance_line_plot.png': 'Line Plot',
                 'score_distribution.png': 'Score Distribution',
-                'claude_analysis.md': 'Claude Analysis Report',
+                'vexoo_analysis.md': 'Vexoo Analysis Report',
                 'pycaret_best_seed.csv': 'PyCaret Best Seed Results',
                 'pycaret_worst_seed.csv': 'PyCaret Worst Seed Results',
                 'pycaret_most_common_seed.csv': 'PyCaret Most Common Seed Results'
@@ -488,4 +488,4 @@ Please structure your response as a clear, actionable report for a machine learn
             
         except Exception as e:
             logger.error(f"Error getting available files: {str(e)}")
-            return []   
+            return []

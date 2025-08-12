@@ -1,25 +1,25 @@
 # FastAPI and web server
-fastapi
-uvicorn[standard]
-python-multipart
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-multipart==0.0.20
 
 # Data processing and ML
-pandas
-numpy
-scikit-learn
-imbalanced-learn
+pandas==2.1.4
+numpy==1.26.4
+scikit-learn==1.4.2
+imbalanced-learn== 0.13.0
 
 # Visualization
-matplotlib
-seaborn
+matplotlib==3.7.5
+seaborn==0.13.2
 
 # ML AutoML (optional)
-pycaret
+pycaret==3.3.2
 
 # AI integration
-anthropic
+anthropic==0.61.0
 
 # Environment and utilities
-python-dotenv
-pydantic
+python-dotenv==1.1.1
+pydantic==2.11.7
 

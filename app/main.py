@@ -138,11 +138,11 @@ async def run_analysis_background(job_id: str, config: Dict[str, Any]):
                 progress_callback=progress_callback
             )
         
-        # Claude analysis
-        claude_analysis = None
-        if not config['skip_claude']:
-            await update_job_progress(job_id, 95, "Running Claude analysis")
-            claude_analysis = await model_analyzer.run_claude_analysis(
+        # Vexoo analysis
+        vexoo_analysis = None
+        if not config['skip_vexoo']:
+            await update_job_progress(job_id, 95, "Running Vexoo analysis")
+            vexoo_analysis = await model_analyzer.run_vexoo_analysis(
                 results=results,
                 summary=summary,
                 pycaret_results=pycaret_results,
@@ -163,7 +163,7 @@ async def run_analysis_background(job_id: str, config: Dict[str, Any]):
             'summary': summary,
             'seed_results': results,
             'pycaret_results': pycaret_results,
-            'claude_analysis': claude_analysis,
+            'vexoo_analysis': vexoo_analysis,
             'generated_files': generated_files,
             'available_files': model_analyzer.get_available_files()
         }
@@ -411,7 +411,7 @@ async def get_analysis_results(job_id: str):
             },
             seed_results=seed_results,
             pycaret_available=results['pycaret_results'] is not None,
-            claude_analysis_available=results['claude_analysis'] is not None,
+            vexoo_analysis_available=results['vexoo_analysis'] is not None,
             files_generated=[file['filename'] for file in results['available_files']],
             execution_time=execution_time
         )
