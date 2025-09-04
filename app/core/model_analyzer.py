@@ -18,7 +18,6 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     mean_absolute_error, mean_squared_error, r2_score
 )
-from imblearn.over_sampling import ADASYN
 from typing import List, Tuple, Dict, Any, Optional, Callable
 import logging
 from dotenv import load_dotenv
@@ -67,10 +66,11 @@ class ModelAnalyzer:
                                        progress_callback: Optional[Callable] = None) -> List[Tuple[int, float]]:
         """
         Run bias/variance estimation across multiple random seeds (async version)
+        Note: ADASYN is now handled in data preprocessing, not here
         
         Args:
-            X: Features dataframe
-            y: Target series
+            X: Features dataframe (already processed with ADASYN if needed)
+            y: Target series (already processed with ADASYN if needed)
             problem_type: "classification" or "regression"
             metric: Metric to evaluate
             iterations: Number of random seeds to test
@@ -82,17 +82,6 @@ class ModelAnalyzer:
         results = []
         
         try:
-            # Check for class imbalance
-            apply_adasyn = False
-            if problem_type == "classification":
-                n_classes = len(np.unique(y))
-                if n_classes == 2:
-                    class_counts = pd.Series(y).value_counts()
-                    ratio = class_counts.max() / class_counts.sum()
-                    if ratio > 0.6:
-                        apply_adasyn = True
-                        logger.info("Applying ADASYN for class imbalance")
-            
             # Get metric function
             if problem_type == "classification":
                 metric_func = self.classification_metrics[metric.lower()]
@@ -114,13 +103,6 @@ class ModelAnalyzer:
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.3, stratify=stratify, random_state=seed
                 )
-                
-                # Apply ADASYN if needed
-                if apply_adasyn:
-                    try:
-                        X_train, y_train = ADASYN(random_state=seed).fit_resample(X_train, y_train)
-                    except:
-                        pass  # Skip ADASYN if it fails
                 
                 # Train model
                 if problem_type == "classification":
@@ -356,9 +338,9 @@ class ModelAnalyzer:
             
             # Use provided API key or get from environment
             if not api_key:
-                api_key = os.getenv('VEXOO_API_KEY')  # CHANGED: Use VEXOO_API_KEY instead
+                api_key = os.getenv('VEXOO_API_KEY')
                 if not api_key:
-                    logger.warning("No VEXOO API key found")  # CHANGED: Updated log message
+                    logger.warning("No VEXOO API key found")
                     return None
             
             # Prepare context

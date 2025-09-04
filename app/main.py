@@ -1,6 +1,6 @@
 """
 FastAPI backend for CitizenAnalytics™ Model Selection
-Provides REST API endpoints for bias/variance analysis
+Provides REST API endpoints for bias/variance analysis with categorical management and frontend integration
 """
 
 import os
@@ -12,19 +12,22 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 import logging
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, status, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import pandas as pd
 
 from core.models import (
     AnalysisRequest, AnalysisStartResponse, StatusResponse, AnalysisResults,
     FileUploadResponse, ErrorResponse, DataPreview, AvailableDownloads,
-    AnalysisStatus, ProblemType, MetricType
+    AnalysisStatus, ProblemType, MetricType, TargetVisualization,
+    CategoricalConfigRequest, CategoricalConfigResponse
 )
 from core.data_processor import DataProcessor
 from core.model_analyzer import ModelAnalyzer
+from core.target_visualizer import TargetVisualizer
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,8 +39,8 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="CitizenAnalytics™ Model Selection API",
-    description="Advanced bias/variance analysis and model selection for machine learning",
-    version="1.0.0"
+    description="Advanced bias/variance analysis and model selection for machine learning with categorical management",
+    version="2.0.0"
 )
 
 # Configure CORS
@@ -52,15 +55,25 @@ app.add_middleware(
 # Create directories
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("outputs")
+FRONTEND_DIR = Path("frontend")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+FRONTEND_DIR.mkdir(exist_ok=True)
 
-# Serve static files
+# Setup templates and static files
+templates = Jinja2Templates(directory="frontend/templates")
+app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 app.mount("/files", StaticFiles(directory="outputs"), name="files")
 
 # In-memory storage for jobs and files (use Redis in production)
 jobs_storage: Dict[str, Dict[str, Any]] = {}
 files_storage: Dict[str, Dict[str, Any]] = {}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Serve the frontend application"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 async def update_job_progress(job_id: str, progress: int, step: str = None):
@@ -103,7 +116,9 @@ async def run_analysis_background(job_id: str, config: Dict[str, Any]):
             target_col=config['target_column'],
             problem_type=config['problem_type'],
             remove_cols=config['remove_columns'],
-            impute_method=config['impute_method']
+            impute_method=config['impute_method'],
+            categorical_configs=config.get('categorical_configs', []),
+            apply_adasyn=config.get('apply_adasyn', False)
         )
         
         await update_job_progress(job_id, 15, "Starting bias/variance analysis")
@@ -176,13 +191,14 @@ async def run_analysis_background(job_id: str, config: Dict[str, Any]):
         jobs_storage[job_id]['error'] = str(e)
 
 
-@app.get("/")
-async def root():
-    """Health check endpoint"""
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for API"""
     return {
         "message": "CitizenAnalytics™ Model Selection API",
         "status": "healthy",
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "features": ["bias_variance_analysis", "categorical_management", "target_visualization", "adasyn_control"]
     }
 
 
@@ -239,7 +255,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.get("/preview/{file_id}", response_model=DataPreview)
 async def get_data_preview(file_id: str):
-    """Get detailed data preview and suggestions"""
+    """Get detailed data preview with categorical suggestions"""
     try:
         if file_id not in files_storage:
             raise HTTPException(status_code=404, detail="File not found")
@@ -258,7 +274,8 @@ async def get_data_preview(file_id: str):
             rows=preview_data['rows'],
             preview_data=preview_data['preview_data'],
             suggested_target_columns=preview_data['suggested_target_columns'],
-            suggested_remove_columns=preview_data['suggested_remove_columns']
+            suggested_remove_columns=preview_data['suggested_remove_columns'],
+            categorical_suggestions=preview_data['categorical_suggestions']
         )
         
     except Exception as e:
@@ -266,9 +283,118 @@ async def get_data_preview(file_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/configure-categoricals", response_model=CategoricalConfigResponse)
+async def configure_categorical_variables(request: CategoricalConfigRequest):
+    """Validate and store categorical variable configurations"""
+    try:
+        if request.file_id not in files_storage:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        file_info = files_storage[request.file_id]
+        data_processor = DataProcessor()
+        df = data_processor.load_data(file_info['file_path'])
+        
+        # Validate configurations
+        validated_configs, warnings = data_processor.validate_categorical_configs(
+            df, [config.dict() for config in request.categorical_configs]
+        )
+        
+        # Store validated configurations in file storage for later use
+        files_storage[request.file_id]['categorical_configs'] = validated_configs
+        
+        return CategoricalConfigResponse(
+            file_id=request.file_id,
+            message=f"Validated {len(validated_configs)} categorical configurations",
+            validated_configs=validated_configs,
+            warnings=warnings
+        )
+        
+    except Exception as e:
+        logger.error(f"Categorical configuration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/visualize-target/{file_id}", response_model=TargetVisualization)
+async def visualize_target_variable(file_id: str, target_column: str, problem_type: ProblemType):
+    """Generate target variable visualization and ADASYN recommendation"""
+    try:
+        if file_id not in files_storage:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        file_info = files_storage[file_id]
+        data_processor = DataProcessor()
+        target_visualizer = TargetVisualizer()
+        
+        # Load data
+        df = data_processor.load_data(file_info['file_path'])
+        
+        # Validate target column
+        if target_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Target column '{target_column}' not found")
+        
+        # Generate visualization
+        viz_data = target_visualizer.generate_target_visualization(
+            df, target_column, problem_type.value
+        )
+        
+        # Get ADASYN recommendation
+        adasyn_rec = target_visualizer.get_adasyn_recommendation(
+            df, target_column, problem_type.value
+        )
+        
+        # Store ADASYN recommendation in file storage
+        files_storage[file_id]['adasyn_recommendation'] = adasyn_rec
+        
+        return TargetVisualization(
+            file_id=file_id,
+            target_column=target_column,
+            problem_type=problem_type,
+            chart_base64=viz_data['chart_base64'],
+            chart_type=viz_data['chart_type'],
+            statistics=viz_data['statistics'],
+            class_imbalance_info=viz_data.get('class_imbalance_info')
+        )
+        
+    except Exception as e:
+        logger.error(f"Target visualization failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/adasyn-recommendation/{file_id}")
+async def get_adasyn_recommendation(file_id: str, target_column: str, problem_type: ProblemType):
+    """Get ADASYN recommendation for the given target and problem type"""
+    try:
+        if file_id not in files_storage:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        file_info = files_storage[file_id]
+        target_visualizer = TargetVisualizer()
+        data_processor = DataProcessor()
+        
+        # Load data
+        df = data_processor.load_data(file_info['file_path'])
+        
+        # Validate target column
+        if target_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"Target column '{target_column}' not found")
+        
+        # Get ADASYN recommendation
+        adasyn_rec = target_visualizer.get_adasyn_recommendation(
+            df, target_column, problem_type.value
+        )
+        
+        return adasyn_rec
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ADASYN recommendation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"ADASYN recommendation failed: {str(e)}")
+
+
 @app.post("/analyze", response_model=AnalysisStartResponse)
 async def start_analysis(request: AnalysisRequest, background_tasks: BackgroundTasks):
-    """Start bias/variance analysis"""
+    """Start bias/variance analysis with categorical management"""
     try:
         # Validate file exists
         if request.file_id not in files_storage:
@@ -279,12 +405,16 @@ async def start_analysis(request: AnalysisRequest, background_tasks: BackgroundT
         data_processor = DataProcessor()
         df = data_processor.load_data(file_info['file_path'])
         
+        # Convert categorical configs to dict format
+        categorical_configs = [config.dict() for config in request.categorical_configs]
+        
         # Validate configuration
         validation = data_processor.validate_configuration(
             df=df,
             target_col=request.target_column,
             problem_type=request.problem_type.value,
-            remove_cols=request.remove_columns
+            remove_cols=request.remove_columns,
+            categorical_configs=categorical_configs
         )
         
         if not validation['valid']:
@@ -297,31 +427,50 @@ async def start_analysis(request: AnalysisRequest, background_tasks: BackgroundT
         if not request.metric:
             request.metric = MetricType.accuracy if request.problem_type == ProblemType.classification else MetricType.mae
         
+        # Handle ADASYN decision
+        apply_adasyn = request.apply_adasyn
+        if apply_adasyn is None:
+            # Auto-determine based on problem type and class imbalance
+            target_visualizer = TargetVisualizer()
+            adasyn_rec = target_visualizer.get_adasyn_recommendation(
+                df, request.target_column, request.problem_type.value
+            )
+            apply_adasyn = adasyn_rec['recommended']
+        
         # Generate job ID
         job_id = str(uuid.uuid4())
         
         # Estimate duration
-        estimated_duration = f"{request.iterations * 2}s - {request.iterations * 5}s"
+        base_time = request.iterations * 2
         if not request.skip_pycaret:
-            estimated_duration = f"{request.iterations * 3}s - {request.iterations * 8}s"
+            base_time *= 1.5
+        if not request.skip_vexoo:
+            base_time += 30
+        
+        estimated_duration = f"{int(base_time)}s - {int(base_time * 1.5)}s"
+        
+        # Prepare analysis config
+        analysis_config = request.dict()
+        analysis_config['apply_adasyn'] = apply_adasyn
+        analysis_config['categorical_configs'] = categorical_configs
         
         # Store job info
         jobs_storage[job_id] = {
             'status': AnalysisStatus.pending,
             'progress': 0,
             'current_step': 'Initializing',
-            'config': request.dict(),
+            'config': analysis_config,
             'file_info': file_info,
             'warnings': validation.get('warnings', [])
         }
         
         # Start background analysis
-        background_tasks.add_task(run_analysis_background, job_id, request.dict())
+        background_tasks.add_task(run_analysis_background, job_id, analysis_config)
         
         return AnalysisStartResponse(
             job_id=job_id,
             status=AnalysisStatus.pending,
-            message="Analysis started successfully",
+            message="Analysis started successfully with categorical management",
             estimated_duration=estimated_duration
         )
         
@@ -440,7 +589,7 @@ async def get_available_downloads(job_id: str):
                 download_list.append({
                     "filename": file_path.name,
                     "file_type": file_type,
-                    "download_url": f"/files/{job_id}/{file_path.name}",  # Changed to /files
+                    "download_url": f"/files/{job_id}/{file_path.name}",
                     "file_size": file_path.stat().st_size
                 })
         

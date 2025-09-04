@@ -1,16 +1,17 @@
 """
 Data processing module for CitizenAnalytics™ Model Selection (FastAPI version)
-Handles data loading, preprocessing, and feature engineering
+Handles data loading, preprocessing, feature engineering, and categorical management
 """
 
 import pandas as pd
 import numpy as np
+import re
 from sklearn.model_selection import train_test_split
 from sklearn.impute import SimpleImputer
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.ensemble import ExtraTreesRegressor
-from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder
+from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
 from typing import Tuple, List, Dict, Any, Optional
 import logging
@@ -25,7 +26,9 @@ class DataProcessor:
         self.categorical_cols = []
         self.numeric_cols = []
         self.preprocessor = None
-    
+        self.categorical_configs = {}
+        self.ordinal_encoders = {}
+        
     def load_data(self, file_path: str) -> pd.DataFrame:
         """Load data from various file formats"""
         try:
@@ -68,6 +71,9 @@ class DataProcessor:
             suggested_targets = self._suggest_target_columns(df)
             suggested_remove = self._suggest_remove_columns(df)
             
+            # Generate categorical suggestions
+            categorical_suggestions = self._suggest_categorical_types(df)
+            
             return {
                 "columns": df.columns.tolist(),
                 "data_types": data_types,
@@ -75,12 +81,123 @@ class DataProcessor:
                 "rows": len(df),
                 "preview_data": preview_data,
                 "suggested_target_columns": suggested_targets,
-                "suggested_remove_columns": suggested_remove
+                "suggested_remove_columns": suggested_remove,
+                "categorical_suggestions": categorical_suggestions
             }
             
         except Exception as e:
             logger.error(f"Error generating data preview: {str(e)}")
             raise
+    
+    def _suggest_categorical_types(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Suggest ordinal vs nominal classification for categorical variables"""
+        suggestions = []
+        
+        for col in df.columns:
+            # Only process non-numeric columns
+            if pd.api.types.is_numeric_dtype(df[col]):
+                continue
+                
+            unique_values = df[col].dropna().unique()
+            unique_count = len(unique_values)
+            
+            # Skip columns with too many unique values (likely text/ID columns)
+            if unique_count > 20:
+                continue
+            
+            # Convert to strings for analysis
+            str_values = [str(val).strip().lower() for val in unique_values]
+            
+            # Determine suggestion based on patterns
+            suggested_type, reasoning = self._classify_categorical_variable(str_values, unique_count)
+            
+            suggestions.append({
+                "variable_name": col,
+                "suggested_type": suggested_type,
+                "unique_values": [str(val) for val in unique_values],
+                "unique_count": unique_count,
+                "reasoning": reasoning
+            })
+        
+        return suggestions
+    
+    def _classify_categorical_variable(self, str_values: List[str], unique_count: int) -> Tuple[str, str]:
+        """Classify a categorical variable as ordinal or nominal"""
+        
+        # Binary patterns (likely ordinal)
+        binary_patterns = [
+            ['yes', 'no'], ['true', 'false'], ['0', '1'], ['pass', 'fail'],
+            ['approved', 'rejected'], ['active', 'inactive'], ['on', 'off'],
+            ['high', 'low'], ['good', 'bad'], ['positive', 'negative']
+        ]
+        
+        # Ordinal patterns
+        ordinal_patterns = [
+            ['low', 'medium', 'high'], ['small', 'medium', 'large'],
+            ['poor', 'fair', 'good', 'excellent'], ['bad', 'average', 'good', 'excellent'],
+            ['never', 'rarely', 'sometimes', 'often', 'always'],
+            ['strongly disagree', 'disagree', 'neutral', 'agree', 'strongly agree'],
+            ['beginner', 'intermediate', 'advanced'], ['junior', 'senior'],
+            ['first', 'second', 'third'], ['primary', 'secondary', 'tertiary']
+        ]
+        
+        # Size/rating patterns
+        size_patterns = ['xs', 's', 'm', 'l', 'xl', 'xxl']
+        rating_patterns = ['a', 'b', 'c', 'd', 'f']  # Grades
+        
+        str_values_set = set(str_values)
+        
+        # Check for exact binary matches
+        for pattern in binary_patterns:
+            if str_values_set == set(pattern):
+                return "ordinal", f"Binary classification pattern detected: {pattern}"
+        
+        # Check for ordinal patterns
+        for pattern in ordinal_patterns:
+            if str_values_set.issubset(set(pattern)) and len(str_values_set) >= 2:
+                return "ordinal", f"Ordinal pattern detected: {pattern}"
+        
+        # Check for size patterns
+        if str_values_set.issubset(set(size_patterns)):
+            return "ordinal", "Size classification detected (XS, S, M, L, XL, etc.)"
+        
+        # Check for grade patterns
+        if str_values_set.issubset(set(rating_patterns)):
+            return "ordinal", "Grade/rating pattern detected (A, B, C, D, F)"
+        
+        # Check for numeric strings (could be ordinal)
+        numeric_strings = []
+        for val in str_values:
+            try:
+                float(val)
+                numeric_strings.append(val)
+            except ValueError:
+                pass
+        
+        if len(numeric_strings) == len(str_values):
+            return "ordinal", "Numeric strings detected - likely ordinal"
+        
+        # Check for month/day names
+        months = ['january', 'february', 'march', 'april', 'may', 'june',
+                 'july', 'august', 'september', 'october', 'november', 'december']
+        month_abbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                     'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+        days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        day_abbr = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+        
+        if str_values_set.issubset(set(months + month_abbr)):
+            return "ordinal", "Month names detected - chronological order"
+        
+        if str_values_set.issubset(set(days + day_abbr)):
+            return "ordinal", "Day names detected - chronological order"
+        
+        # Default heuristics
+        if unique_count == 2:
+            return "ordinal", "Binary variable - assuming ordinal ordering"
+        elif 3 <= unique_count <= 7:
+            return "ordinal", f"Small number of categories ({unique_count}) - likely ordinal"
+        else:
+            return "nominal", f"Many categories ({unique_count}) - likely nominal"
     
     def _suggest_target_columns(self, df: pd.DataFrame) -> List[str]:
         """Suggest potential target columns based on data characteristics"""
@@ -94,7 +211,7 @@ class DataProcessor:
                 'target', 'label', 'class', 'outcome', 'result', 'prediction',
                 'approved', 'success', 'failure', 'churned', 'converted',
                 'price', 'value', 'amount', 'score', 'rating', 'revenue',
-                'sales', 'profit', 'loss', 'cost'
+                'sales', 'profit', 'loss', 'cost', 'gone', 'left'
             ]
             
             # Check if column name suggests it's a target
@@ -136,10 +253,53 @@ class DataProcessor:
         
         return suggestions
     
+    def validate_categorical_configs(self, df: pd.DataFrame, 
+                                   categorical_configs: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """Validate categorical configurations"""
+        validated_configs = []
+        warnings = []
+        
+        for config in categorical_configs:
+            var_name = config['variable_name']
+            var_type = config['variable_type']
+            value_ordering = config.get('value_ordering', [])
+            
+            # Check if column exists
+            if var_name not in df.columns:
+                warnings.append(f"Column '{var_name}' not found in dataset")
+                continue
+            
+            # Check if column is actually categorical
+            if pd.api.types.is_numeric_dtype(df[var_name]):
+                warnings.append(f"Column '{var_name}' is numeric, not categorical")
+                continue
+            
+            # Get unique values
+            unique_values = set(str(val) for val in df[var_name].dropna().unique())
+            
+            # Validate ordinal ordering
+            if var_type == 'ordinal' and value_ordering:
+                ordering_set = set(value_ordering)
+                if not ordering_set == unique_values:
+                    missing = unique_values - ordering_set
+                    extra = ordering_set - unique_values
+                    if missing:
+                        warnings.append(f"Missing values in ordering for '{var_name}': {missing}")
+                    if extra:
+                        warnings.append(f"Extra values in ordering for '{var_name}': {extra}")
+                    continue
+            
+            validated_configs.append(config)
+        
+        return validated_configs, warnings
+    
     def validate_configuration(self, df: pd.DataFrame, target_col: str, 
-                             problem_type: str, remove_cols: Optional[List[str]] = None) -> Dict[str, Any]:
+                             problem_type: str, remove_cols: Optional[List[str]] = None,
+                             categorical_configs: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Validate analysis configuration and return insights"""
         remove_cols = remove_cols or []
+        categorical_configs = categorical_configs or []
+        
         validation_result = {
             "valid": True,
             "warnings": [],
@@ -181,6 +341,11 @@ class DataProcessor:
                     validation_result["valid"] = False
                     validation_result["errors"].append("Regression target must be numeric")
         
+        # Validate categorical configurations
+        if categorical_configs:
+            _, cat_warnings = self.validate_categorical_configs(df, categorical_configs)
+            validation_result["warnings"].extend(cat_warnings)
+        
         # Check remaining features after removal
         remaining_features = len(df.columns) - len(remove_cols) - 1  # -1 for target
         if remaining_features < 1:
@@ -196,7 +361,10 @@ class DataProcessor:
         return validation_result
     
     def process_data(self, df: pd.DataFrame, target_col: str, problem_type: str, 
-                    remove_cols: Optional[List[str]] = None, impute_method: str = "mean") -> Tuple[pd.DataFrame, pd.Series]:
+                    remove_cols: Optional[List[str]] = None, 
+                    impute_method: str = "mean",
+                    categorical_configs: Optional[List[Dict[str, Any]]] = None,
+                    apply_adasyn: bool = False) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Process the dataset for machine learning
         
@@ -206,6 +374,8 @@ class DataProcessor:
             problem_type: "classification" or "regression"
             remove_cols: List of columns to remove
             impute_method: "mean" or "iterative"
+            categorical_configs: List of categorical variable configurations
+            apply_adasyn: Whether to apply ADASYN for class balancing
         
         Returns:
             X, y: Processed features and target
@@ -213,8 +383,12 @@ class DataProcessor:
         try:
             df_processed = df.copy()
             remove_cols = remove_cols or []
+            categorical_configs = categorical_configs or []
             
             logger.info(f"Processing data for {problem_type} with target: {target_col}")
+            
+            # Store categorical configurations
+            self.categorical_configs = {config['variable_name']: config for config in categorical_configs}
             
             # Process target variable
             y = self._process_target(df_processed[target_col], problem_type)
@@ -222,6 +396,10 @@ class DataProcessor:
             # Process features
             X = df_processed.drop(columns=[target_col] + remove_cols)
             X = self._process_features(X, impute_method)
+            
+            # Apply ADASYN if requested and applicable
+            if apply_adasyn and problem_type == "classification":
+                X, y = self._apply_adasyn(X, y)
             
             logger.info(f"Data processing complete: {X.shape[1]} features, {len(y)} samples")
             return X, y
@@ -251,29 +429,15 @@ class DataProcessor:
             return target_series
     
     def _process_features(self, X: pd.DataFrame, impute_method: str) -> pd.DataFrame:
-        """Process features: encoding and imputation"""
+        """Process features: encoding and imputation with categorical management"""
+        
         # Identify categorical and numeric columns
         self.categorical_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
         self.numeric_cols = X.select_dtypes(include=[np.number]).columns.tolist()
         
         if self.categorical_cols:
-            logger.info(f"Processing {len(self.categorical_cols)} categorical columns")
-            # Simple one-hot encoding for categorical variables
-            oh_enc = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
-            self.preprocessor = ColumnTransformer(
-                transformers=[("cat", oh_enc, self.categorical_cols)],
-                remainder="passthrough"
-            )
-            
-            X_encoded = self.preprocessor.fit_transform(X)
-            
-            # Create feature names
-            feature_names = []
-            cat_names = self.preprocessor.named_transformers_['cat'].get_feature_names_out(self.categorical_cols)
-            feature_names.extend(cat_names)
-            feature_names.extend(self.numeric_cols)
-            
-            X = pd.DataFrame(X_encoded, columns=feature_names)
+            logger.info(f"Processing {len(self.categorical_cols)} categorical columns with configurations")
+            X = self._encode_categorical_variables(X)
         
         # Handle missing values
         missing_cols = X.columns[X.isnull().any()].tolist()
@@ -291,6 +455,109 @@ class DataProcessor:
         
         logger.info(f"Final feature shape: {X.shape}")
         return X
+    
+    def _encode_categorical_variables(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Encode categorical variables based on configurations"""
+        
+        ordinal_cols = []
+        nominal_cols = []
+        
+        # Classify columns based on configurations
+        for col in self.categorical_cols:
+            if col in self.categorical_configs:
+                config = self.categorical_configs[col]
+                if config['variable_type'] == 'ordinal':
+                    ordinal_cols.append(col)
+                else:
+                    nominal_cols.append(col)
+            else:
+                # Default to nominal if no configuration provided
+                nominal_cols.append(col)
+        
+        # Process ordinal columns
+        for col in ordinal_cols:
+            X = self._encode_ordinal_column(X, col)
+        
+        # Process nominal columns with one-hot encoding
+        if nominal_cols:
+            X = self._encode_nominal_columns(X, nominal_cols)
+        
+        return X
+    
+    def _encode_ordinal_column(self, X: pd.DataFrame, col: str) -> pd.DataFrame:
+        """Encode a single ordinal column"""
+        config = self.categorical_configs[col]
+        value_ordering = config.get('value_ordering', [])
+        
+        if value_ordering:
+            # Use specified ordering
+            mapping = {val: idx for idx, val in enumerate(value_ordering)}
+            X[col] = X[col].map(mapping)
+            self.ordinal_encoders[col] = {'type': 'custom', 'mapping': mapping}
+            logger.info(f"Encoded ordinal column '{col}' with custom ordering: {value_ordering}")
+        else:
+            # Use automatic ordering
+            label_encoder = LabelEncoder()
+            X[col] = label_encoder.fit_transform(X[col].astype(str))
+            self.ordinal_encoders[col] = {'type': 'auto', 'encoder': label_encoder}
+            logger.info(f"Encoded ordinal column '{col}' with automatic ordering")
+        
+        return X
+    
+    def _encode_nominal_columns(self, X: pd.DataFrame, nominal_cols: List[str]) -> pd.DataFrame:
+        """Encode nominal columns with one-hot encoding"""
+        
+        # Create one-hot encoder
+        oh_enc = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+        
+        # Apply one-hot encoding
+        encoded_array = oh_enc.fit_transform(X[nominal_cols])
+        
+        # Create feature names
+        feature_names = oh_enc.get_feature_names_out(nominal_cols)
+        
+        # Create DataFrame with encoded features
+        encoded_df = pd.DataFrame(encoded_array, columns=feature_names, index=X.index)
+        
+        # Remove original nominal columns and add encoded ones
+        X = X.drop(columns=nominal_cols)
+        X = pd.concat([X, encoded_df], axis=1)
+        
+        # Store encoder for future use
+        self.preprocessor = oh_enc
+        
+        logger.info(f"One-hot encoded {len(nominal_cols)} nominal columns into {len(feature_names)} features")
+        
+        return X
+    
+    def _apply_adasyn(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
+        """Apply ADASYN for class balancing"""
+        try:
+            from imblearn.over_sampling import ADASYN
+            
+            logger.info("Applying ADASYN for class balancing")
+            
+            # Check class distribution before
+            class_counts_before = pd.Series(y).value_counts().sort_index()
+            logger.info(f"Class distribution before ADASYN: {dict(class_counts_before)}")
+            
+            # Apply ADASYN
+            adasyn = ADASYN(random_state=42)
+            X_resampled, y_resampled = adasyn.fit_resample(X, y)
+            
+            # Check class distribution after
+            class_counts_after = pd.Series(y_resampled).value_counts().sort_index()
+            logger.info(f"Class distribution after ADASYN: {dict(class_counts_after)}")
+            
+            # Convert back to DataFrame/Series
+            X_resampled = pd.DataFrame(X_resampled, columns=X.columns)
+            y_resampled = pd.Series(y_resampled)
+            
+            return X_resampled, y_resampled
+            
+        except Exception as e:
+            logger.warning(f"ADASYN failed: {str(e)}. Proceeding without resampling.")
+            return X, y
     
     def check_class_imbalance(self, y: pd.Series, problem_type: str) -> Tuple[bool, Optional[str]]:
         """Check for class imbalance and determine if ADASYN should be applied"""
