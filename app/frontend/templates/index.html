@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CitizenAnalytics™ Model Selection</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">
+                <i class="fas fa-chart-line"></i>
+                CitizenAnalytics™ Model Selection
+            </h1>
+            <div class="version">v2.0</div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step active" id="step-1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Upload</div>
+                </div>
+                <div class="step" id="step-2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Preview</div>
+                </div>
+                <div class="step" id="step-3">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Configure</div>
+                </div>
+                <div class="step" id="step-4">
+                    <div class="step-number">4</div>
+                    <div class="step-label">Visualize</div>
+                </div>
+                <div class="step" id="step-5">
+                    <div class="step-number">5</div>
+                    <div class="step-label">Analyze</div>
+                </div>
+                <div class="step" id="step-6">
+                    <div class="step-number">6</div>
+                    <div class="step-label">Results</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Upload -->
+            <div class="step-content active" id="upload-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-upload"></i> Upload Your Dataset</h2>
+                        <p>Upload CSV, Excel, or JSON files for machine learning analysis</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area" id="upload-area">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <h3>Drag & Drop your file here</h3>
+                                <p>or click to browse</p>
+                                <small>Supported: CSV, XLSX, XLS, JSON (max 100MB)</small>
+                            </div>
+                            <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.json" hidden>
+                        </div>
+                        <div class="upload-progress" id="upload-progress" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                            <div class="progress-text" id="progress-text">Uploading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Preview -->
+            <div class="step-content" id="preview-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-table"></i> Data Preview & Suggestions</h2>
+                        <p>Review your data and smart categorical variable suggestions</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="data-summary" id="data-summary">
+                            <!-- Data summary will be populated here -->
+                        </div>
+                        <div class="suggestions-grid">
+                            <div class="suggestion-card">
+                                <h3><i class="fas fa-bullseye"></i> Target Columns</h3>
+                                <div id="target-suggestions" class="suggestion-list">
+                                    <!-- Target suggestions will be populated here -->
+                                </div>
+                            </div>
+                            <div class="suggestion-card">
+                                <h3><i class="fas fa-tags"></i> Categorical Variables</h3>
+                                <div id="categorical-suggestions" class="suggestion-list">
+                                    <!-- Categorical suggestions will be populated here -->
+                                </div>
+                            </div>
+                            <div class="suggestion-card">
+                                <h3><i class="fas fa-trash"></i> Remove Columns</h3>
+                                <div id="remove-suggestions" class="suggestion-list">
+                                    <!-- Remove suggestions will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="data-table-container">
+                            <h3>Data Preview</h3>
+                            <div class="table-wrapper">
+                                <table id="data-table" class="data-table">
+                                    <!-- Data table will be populated here -->
+                                </table>
+                            </div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-primary" id="configure-btn">
+                                <i class="fas fa-cogs"></i> Configure Variables
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Configure Categorical Variables -->
+            <div class="step-content" id="configure-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-cogs"></i> Configure Categorical Variables</h2>
+                        <p>Set ordinal vs nominal encoding and custom value ordering</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="config-form">
+                            <div class="form-group">
+                                <label for="target-select">Target Column</label>
+                                <select id="target-select" class="form-control">
+                                    <option value="">Select target column...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="problem-type">Problem Type</label>
+                                <select id="problem-type" class="form-control">
+                                    <option value="classification">Classification</option>
+                                    <option value="regression">Regression</option>
+                                </select>
+                            </div>
+                            <div class="categorical-config" id="categorical-config">
+                                <!-- Categorical variable configurations will be populated here -->
+                            </div>
+                            <div class="step-actions">
+                                <button class="btn btn-secondary" id="back-to-preview">
+                                    <i class="fas fa-arrow-left"></i> Back to Preview
+                                </button>
+                                <button class="btn btn-primary" id="visualize-btn">
+                                    <i class="fas fa-chart-bar"></i> Visualize Target
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Target Visualization -->
+            <div class="step-content" id="visualize-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-bar"></i> Target Variable Analysis</h2>
+                        <p>View target distribution and class imbalance analysis</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="visualization-container">
+                            <div class="chart-container">
+                                <img id="target-chart" src="" alt="Target variable chart" style="display: none;">
+                            </div>
+                            <div class="stats-container">
+                                <div class="stats-grid" id="target-stats">
+                                    <!-- Target statistics will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="adasyn-recommendation" id="adasyn-recommendation">
+                            <!-- ADASYN recommendation will be populated here -->
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-configure">
+                                <i class="fas fa-arrow-left"></i> Back to Configure
+                            </button>
+                            <button class="btn btn-primary" id="start-analysis-btn">
+                                <i class="fas fa-play"></i> Start Analysis
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Analysis Configuration & Progress -->
+            <div class="step-content" id="analysis-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-cogs"></i> Analysis Configuration</h2>
+                        <p>Configure bias/variance analysis parameters</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="analysis-config" id="analysis-config">
+                            <div class="config-grid">
+                                <div class="form-group">
+                                    <label for="metric-select">Evaluation Metric</label>
+                                    <select id="metric-select" class="form-control">
+                                        <option value="accuracy">Accuracy</option>
+                                        <option value="precision">Precision</option>
+                                        <option value="recall">Recall</option>
+                                        <option value="f1">F1 Score</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="iterations">Iterations (Random Seeds)</label>
+                                    <input type="number" id="iterations" class="form-control" value="100" min="10" max="1000">
+                                </div>
+                                <div class="form-group">
+                                    <label for="impute-method">Missing Value Imputation</label>
+                                    <select id="impute-method" class="form-control">
+                                        <option value="mean">Mean (Fast)</option>
+                                        <option value="iterative">Iterative (Better)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="apply-adasyn"> Apply ADASYN
+                                        <span class="checkmark"></span>
+                                        Apply ADASYN for class balancing
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="skip-pycaret"> 
+                                        <span class="checkmark"></span>
+                                        Skip PyCaret comparison (faster)
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="skip-vexoo">
+                                        <span class="checkmark"></span>
+                                        Skip Vexoo AI analysis (faster)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Analysis Progress -->
+                        <div class="analysis-progress" id="analysis-progress" style="display: none;">
+                            <div class="progress-header">
+                                <h3 id="progress-title">Starting Analysis...</h3>
+                                <div class="progress-percentage" id="progress-percentage">0%</div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="analysis-progress-fill"></div>
+                            </div>
+                            <div class="progress-details">
+                                <div class="progress-step" id="progress-step">Initializing...</div>
+                                <div class="progress-time" id="progress-time">Estimated: --</div>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-visualize">
+                                <i class="fas fa-arrow-left"></i> Back to Visualize
+                            </button>
+                            <button class="btn btn-success" id="run-analysis-btn">
+                                <i class="fas fa-rocket"></i> Run Analysis
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6: Results -->
+            <div class="step-content" id="results-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-line"></i> Analysis Results</h2>
+                        <p>Bias/variance analysis results and model recommendations</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="results-summary" id="results-summary">
+                            <!-- Results summary will be populated here -->
+                        </div>
+                        
+                        <div class="results-tabs">
+                            <div class="tab-nav">
+                                <button class="tab-btn active" data-tab="summary">Summary</button>
+                                <button class="tab-btn" data-tab="seeds">Seed Results</button>
+                                <button class="tab-btn" data-tab="charts">Charts</button>
+                                <button class="tab-btn" data-tab="pycaret">PyCaret</button>
+                                <button class="tab-btn" data-tab="vexoo">AI Analysis</button>
+                                <button class="tab-btn" data-tab="downloads">Downloads</button>
+                            </div>
+                            
+                            <div class="tab-content active" id="tab-summary">
+                                <div class="summary-grid" id="summary-grid">
+                                    <!-- Summary content will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <div class="tab-content" id="tab-seeds">
+                                <div class="seeds-table-container">
+                                    <table id="seeds-table" class="data-table">
+                                        <!-- Seeds table will be populated here -->
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-content" id="tab-charts">
+                                <div class="charts-grid">
+                                    <div class="chart-item">
+                                        <h4>Performance Across Seeds</h4>
+                                        <img id="line-chart" src="" alt="Line chart">
+                                    </div>
+                                    <div class="chart-item">
+                                        <h4>Score Distribution</h4>
+                                        <img id="histogram-chart" src="" alt="Histogram">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="tab-content" id="tab-pycaret">
+                                <div class="pycaret-results" id="pycaret-results">
+                                    <!-- PyCaret results will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <div class="tab-content" id="tab-vexoo">
+                                <div class="vexoo-analysis" id="vexoo-analysis">
+                                    <!-- Vexoo analysis will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <div class="tab-content" id="tab-downloads">
+                                <div class="downloads-list" id="downloads-list">
+                                    <!-- Downloads list will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="new-analysis-btn">
+                                <i class="fas fa-plus"></i> New Analysis
+                            </button>
+                            <button class="btn btn-danger" id="cleanup-btn">
+                                <i class="fas fa-trash"></i> Cleanup Files
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <div class="loading-text">Processing...</div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

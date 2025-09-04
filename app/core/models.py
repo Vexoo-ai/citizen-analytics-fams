@@ -36,7 +36,41 @@ class AnalysisStatus(str, Enum):
     failed = "failed"
 
 
-# Request Models
+class CategoricalType(str, Enum):
+    ordinal = "ordinal"
+    nominal = "nominal"
+
+
+# New Models for Categorical Management
+class CategoricalConfig(BaseModel):
+    variable_name: str = Field(..., description="Name of categorical variable")
+    variable_type: CategoricalType = Field(..., description="Ordinal or nominal")
+    value_ordering: Optional[List[str]] = Field(None, description="Order for ordinal variables (from lowest to highest)")
+
+
+class CategoricalSuggestion(BaseModel):
+    variable_name: str
+    suggested_type: CategoricalType
+    unique_values: List[str]
+    unique_count: int
+    reasoning: str
+
+
+class ClassImbalanceInfo(BaseModel):
+    class_distribution: Dict[str, int]
+    imbalance_ratio: float
+    majority_class: str
+    minority_class: str
+    is_imbalanced: bool  # True if > 60/40
+
+
+class AdaSync_recommendation(BaseModel):
+    recommended: bool
+    reason: str
+    class_imbalance_info: Optional[ClassImbalanceInfo] = None
+
+
+# Updated Request Models
 class AnalysisRequest(BaseModel):
     file_id: str = Field(..., description="ID of uploaded file")
     target_column: str = Field(..., description="Target column name")
@@ -45,6 +79,8 @@ class AnalysisRequest(BaseModel):
     iterations: int = Field(100, ge=10, le=1000, description="Number of random seeds to test")
     remove_columns: List[str] = Field(default=[], description="Columns to exclude from features")
     impute_method: ImputeMethod = Field(ImputeMethod.mean, description="Missing value imputation method")
+    categorical_configs: List[CategoricalConfig] = Field(default=[], description="Categorical variable configurations")
+    apply_adasyn: Optional[bool] = Field(None, description="Whether to apply ADASYN (None for auto-suggestion)")
     skip_pycaret: bool = Field(False, description="Skip PyCaret model comparison")
     skip_vexoo: bool = Field(False, description="Skip Vexoo AI analysis")
 
@@ -122,6 +158,18 @@ class DataPreview(BaseModel):
     preview_data: List[Dict[str, Any]]
     suggested_target_columns: List[str]
     suggested_remove_columns: List[str]
+    categorical_suggestions: List[CategoricalSuggestion]  # New field
+    adasyn_recommendation: Optional[AdaSync_recommendation] = None  # New field
+
+
+class TargetVisualization(BaseModel):
+    file_id: str
+    target_column: str
+    problem_type: ProblemType
+    chart_base64: str
+    chart_type: str  # "bar_chart", "histogram"
+    statistics: Dict[str, Any]
+    class_imbalance_info: Optional[ClassImbalanceInfo] = None
 
 
 class DownloadInfo(BaseModel):
@@ -134,3 +182,17 @@ class DownloadInfo(BaseModel):
 class AvailableDownloads(BaseModel):
     job_id: str
     available_files: List[DownloadInfo]
+
+
+class CategoricalConfigRequest(BaseModel):
+    file_id: str
+    target_column: str
+    problem_type: ProblemType
+    categorical_configs: List[CategoricalConfig]
+
+
+class CategoricalConfigResponse(BaseModel):
+    file_id: str
+    message: str
+    validated_configs: List[CategoricalConfig]
+    warnings: List[str]
